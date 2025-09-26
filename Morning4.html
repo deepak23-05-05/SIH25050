@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Dashboard with MQTT Lane Status (Replicated)</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> <!-- Your Working MQTT.js Library -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .mqtt-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+
+        .mqtt-connected {
+            background-color: #4CAF50; /* Green */
+        }
+
+        .mqtt-disconnected {
+            background-color: #f44336; /* Red */
+        }
+
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            flex-grow: 1;
+            padding: 0 10px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            height: 80vh;
+            min-height: 500px;
+            box-sizing: border-box;
+        }
+
+        .video-box {
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            min-height: 0;
+            box-sizing: border-box;
+        }
+
+        .video-box video {
+            width: 100%;
+            height: 75%;
+            max-height: 75%;
+            object-fit: contain;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .video-box h2 {
+            font-size: 1.2em;
+            color: #555;
+            margin: 10px 0 5px 0;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* Lane Status UI (Replicated from your traffic-light and countdown styles) */
+        .lane-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: 5px;
+            padding: 5px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            border: 1px solid #ccc; /* Like your light border */
+        }
+
+        .status-open {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        .status-closed {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        .running-time {
+            width: 30px; /* Exact like your .countdown width */
+            height: 20px;
+            background-color: white;
+            color: black;
+            text-align: center;
+            border: 1px solid #ccc; /* Exact like your .countdown */
+            border-radius: 3px;
+            font-size: 14px; /* Exact like your .countdown */
+            line-height: 20px;
+            display: block; /* Always space, like your divs */
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr 1fr 1fr;
+                height: auto;
+                gap: 15px;
+                max-width: 100%;
+            }
+            
+            .video-box video {
+                height: 60%;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .mqtt-status {
+                position: static;
+                margin-bottom: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .dashboard-grid {
+                grid-template-rows: repeat(4, auto);
+            }
+
+            .running-time {
+                width: 25px;
+                font-size: 12px;
+            }
+        }
+
+        video {
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mqtt-status" class="mqtt-status mqtt-disconnected">MQTT: Disconnected</div>
+
+    <h1>Traffic Camera Live Feeds with Lane Status</h1>
+    
+    <div class="dashboard-container">
+        <div class="dashboard-grid">
+            <div class="video-box">
+                <h2>Intersection North</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video5.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-north">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-north">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection South</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video6.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-south">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-south">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection East</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video7.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-east">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-east">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection West</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video8.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-west">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-west">N/A</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables (replicated from your countdown intervals)
+        let countdownIntervals = {}; // For each direction
+
+        // Initialize MQTT connection (Exact copy from your code)
+        const client = mqtt.connect("ws://broker.hivemq.com:8000/mqtt");
+
+        client.on('connect', function () {
+            console.log("Connected to MQTT broker");
+            updateStatus('Connected');
+            client.subscribe("device/traffic18", function (err) {  // Exact from your code; change to "device/traffic1" if needed
+                if (!err) {
+                    console.log("Subscribed to topic: device/traffic18");
+                }
+            });
+        });
+
+        client.on('error', function (error) {
+            console.error("MQTT connection error:", error);
+            updateStatus('Error: ' + (error.message || error));
+        });
+
+        // MQTT message handling for controlling the lanes (Exact replication from your code)
+        client.on('message', function (topic, message) {
+            if (topic === "device/traffic18") {  // Exact from your code; change to "device/traffic1" if needed
+                const command = message.toString();
+
+                // Extract lane and time from the command (Exact copy)
+                const [lane, time] = command.split('-');
+                const duration = parseInt(time, 10);
+
+                // Reset all lanes to closed (Exact like your resetLights() + resetCountdowns())
+                resetLanes();
+
+                // Set the appropriate lane based on the code (Exact like your if-else)
+                if (lane === 'A') {
+                    activateLane('north');
+                    startCountdown('north', duration);
+                } else if (lane === 'B') {
+                    activateLane('south');
+                    startCountdown('south', duration);
+                } else if (lane === 'C') {
+                    activateLane('west');
+                    startCountdown('west', duration);
+                } else if (lane === 'D') {
+                    activateLane('east');
+                    startCountdown('east', duration);
+                }
+            }
+        });
+
+        // Function to activate the specified lane (Replicated from your activateLight() - sets Open badge)
+        function activateLane(direction) {
+            const statusEl = document.getElementById(`lane-${direction}`).querySelector('.status-badge');
+            statusEl.textContent = 'Open';
+            statusEl.className = 'status-badge status-open';
+        }
+
+        // Function to reset all lanes to closed (Replicated from your resetLights() + resetCountdowns())
+        function resetLanes() {
+            const directions = ['north', 'south', 'east', 'west'];
+            directions.forEach(direction => {
+                const statusEl = document.getElementById(`lane-${direction}`).querySelector('.status-badge');
+                const timeEl = document.getElementById(`time-${direction}`);
+
+                // Reset badge to Closed (like setting red active)
+                statusEl.textContent = 'Closed';
+                statusEl.className = 'status-badge status-closed';
+
+                // Reset time (like hiding countdown)
+                timeEl.textContent = 'N/A';
+
+                // Clear interval (like clearInterval in your countdown)
+                if (countdownIntervals[direction]) {
+                    clearInterval(countdownIntervals[direction]);
+                    delete countdownIntervals[direction];
+                }
+            });
+        }
+
+        // Function to start countdown for a specific direction (Exact replication of your startCountdown())
+        function startCountdown(direction, timeLeft) {
+            const timeEl = document.getElementById(`time-${direction}`);
+
+            timeEl.textContent = timeLeft || 30; // Default 30 if undefined
+
+            const interval = setInterval(() => {
+                timeLeft--;
+                timeEl.textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    // Auto-reset to Closed/N/A (enhancement to match light reset, but keeps your logic)
+                    const statusEl = document.getElementById(`lane-${direction}`).querySelector('.status-badge');
+                    statusEl.textContent = 'Closed';
+                    statusEl.className = 'status-badge status-closed';
+                    timeEl.textContent = 'N/A';
+                    delete countdownIntervals[direction];
+                }
+            }, 1000);
+
+            countdownIntervals[direction] = interval;
+        }
+
+        // Update MQTT Status (Simple addition for dashboard visibility)
+        function updateStatus(text) {
+            const statusEl = document.getElementById('mqtt-status');
+            statusEl.textContent = `MQTT: ${text}`;
+            statusEl.className = `mqtt-status ${text.toLowerCase().includes('connect') ? 'mqtt-connected' : 'mqtt-disconnected'}`;
+        }
+
+        // Cleanup on page unload (Like your clearInterval)
+        window.addEventListener('beforeunload', () => {
+            Object.values(countdownIntervals).forEach(interval => clearInterval(interval));
+            if (client.connected) {
+                client.end();
+            }
+        });
+
+        // Initialize on load (Like your DOMContentLoaded, but with initial reset)
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Dashboard initialized - replicating traffic light logic");
+            updateStatus('Connecting...');
+            resetLanes(); // Initial state: all Closed/N/A
+        });
+    </script>
+
+</body>
+</html>

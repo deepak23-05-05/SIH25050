@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Dashboard with MQTT Lane Status (HiveMQ Debug)</title>
+    <script src="https://unpkg.com/paho-mqtt@1.0.1/paho-mqtt.min.js"></script> <!-- MQTT Client Library -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .mqtt-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+
+        .mqtt-connected {
+            background-color: #4CAF50; /* Green */
+        }
+
+        .mqtt-disconnected {
+            background-color: #f44336; /* Red */
+        }
+
+        .mqtt-connecting {
+            background-color: #ff9800; /* Orange */
+        }
+
+        .reconnect-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .reconnect-btn:hover {
+            background: #1976D2;
+        }
+
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            flex-grow: 1;
+            padding: 0 10px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            height: 80vh;
+            min-height: 500px;
+            box-sizing: border-box;
+        }
+
+        .video-box {
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            min-height: 0;
+            box-sizing: border-box;
+        }
+
+        .video-box video {
+            width: 100%;
+            height: 80%;
+            max-height: 80%;
+            object-fit: contain;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .video-box h2 {
+            font-size: 1.2em;
+            color: #555;
+            margin: 10px 0 5px 0;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .lane-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: 5px;
+            padding: 5px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .status-open {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-closed {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .running-time {
+            font-size: 0.8em;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr 1fr 1fr;
+                height: auto;
+                gap: 15px;
+                max-width: 100%;
+            }
+            
+            .video-box video {
+                height: 60%;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .mqtt-status {
+                position: static;
+                margin-bottom: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .dashboard-grid {
+                grid-template-rows: repeat(4, auto);
+            }
+        }
+
+        video {
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mqtt-status" class="mqtt-status mqtt-disconnected">MQTT: Disconnected</div>
+    <button class="reconnect-btn" onclick="initMqtt()" style="display: none;" id="reconnect-btn">🔄 Reconnect MQTT</button>
+
+    <h1>Traffic Camera Live Feeds with Lane Status</h1>
+    
+    <div class="dashboard-container">
+        <div class="dashboard-grid">
+            <div class="video-box">
+                <h2>Intersection North</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video5.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-north">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-north">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection South</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video6.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-south">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-south">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection East</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video7.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-east">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-east">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection West</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video8.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-west">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-west">N/A</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MQTT Configuration (Fixed for HiveMQ Public WebSocket)
+        const MQTT_CONFIG = {
+            broker: 'ws://broker.hivemq.com:8000/ws', // Corrected path: /ws (not /mqtt)
+            // Alternative secure: 'wss://broker.hivemq.com:8000/ws' (uncomment if ws fails)
+            clientId: 'dashboard_' + Math.random().toString(16).substr(2, 8),
+            topic: 'device/traffic1',
+            username: '',
+            password: ''
+        };
+
+        // Global variables
+        let mqttClient;
+        let laneTimers = {};
+        let timerIntervals = {};
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const lanes = ['north', 'south', 'east', 'west'];
+
+        // Initialize MQTT with Debug
+        function initMqtt() {
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                console.error('Max reconnect attempts reached. Check network/broker.');
+                updateStatus('Failed - Check Console');
+                return;
+            }
+
+            reconnectAttempts++;
+            console.log(`🔄 MQTT Init Attempt #${reconnectAttempts}. Broker: ${MQTT_CONFIG.broker}`);
+
+            // Parse URL properly for Paho (host, port, path)
+            const url = new URL(MQTT_CONFIG.broker);
+            const host = url.hostname;
+            const port = parseInt(url.port) || (url.protocol === 'wss:' ? 443 : 80);
+            const path = url.pathname || '/ws'; // Ensure /ws path
+
+            console.log(`Parsed: Host=${host}, Port=${port}, Path=${path}`);
+
+            if (mqttClient) {
+                mqttClient.disconnect(); // Clean previous
+            }
+
+            mqttClient = new Paho.MQTT.Client(host, port, MQTT_CONFIG.clientId);
+
+            mqttClient.onConnectionLost = onConnectionLost;
+            mqttClient.onMessageArrived = onMessageArrived;
+
+            const connectOptions = {
+                onSuccess: onConnect,
+                onFailure: (e) => {
+                    console.error('❌ MQTT Connection Failed:', {
+                        errorMessage: e.errorMessage,
+                        errorCode: e.errorCode,
+                        invoc: e.invocationContext,
+                        error: e.error
+                    });
+                    updateStatus(`Failed: ${e.errorMessage || 'Unknown Error'}`);
+                    document.getElementById('reconnect-btn').style.display = 'block';
+                    // Exponential backoff retry
+                    const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 30000);
+                    setTimeout(initMqtt, delay);
+                },
+                useSSL: MQTT_CONFIG.broker.startsWith('wss'),
+                userName: MQTT_CONFIG.username,
+                password: MQTT_CONFIG.password,
+                timeout: 10,
+                keepAliveInterval: 20,
+                cleanSession: true,
+                reconnect: true // Auto-reconnect enabled
+            };
+
+            updateStatus('Connecting...');
+            console.log('🚀 Attempting WebSocket connection...');
+            mqttClient.connect(connectOptions);
+        }
+
+        // On Connect
+        function onConnect() {
+            reconnectAttempts = 0;
+            console.log('✅ MQTT Connected Successfully!');
+            updateStatus('Connected');
+            document.getElementById('reconnect-btn').style.display = 'none';
+
+            // Subscribe
+            mqttClient.subscribe(MQTT_CONFIG.topic, {qos: 1});
+            console.log(`📡 Subscribed to ${MQTT_CONFIG.topic}`);
+        }
+
+        // On Connection Lost
+        function onConnectionLost(responseObject) {
+            console.log('⚠️ MQTT Connection Lost:', responseObject.errorMessage || 'Unknown');
+            updateStatus('Disconnected');
+            document.getElementById('reconnect-btn').style.display = 'block';
+            if (responseObject.errorCode !== 0) {
+                setTimeout(initMqtt, 3000);
+            }
+        }
+
+        // On Message
+        function onMessageArrived(message) {
+            console.log('📨 MQTT Message:', {
+                topic: message.destinationName,
+                payload: message.payloadString
+            });
+            
+            if (message.destinationName !== MQTT_CONFIG.topic) return;
+
+            try {
+                const data = JSON.parse(message.payloadString);
+                console.log('🔍 Parsed Payload:', data);
+
+                lanes.forEach(lane => {
+                    if (data[lane]) {
+                        updateLaneStatus(lane, data[lane].condition || 'closed', data[lane].openTime || 0);
+                    }
+                });
+            } catch (e) {
+                console.error('❌ Invalid JSON Payload:', e, message.payloadString);
+            }
+        }
+
+        // Update Lane (unchanged)
+        function updateLaneStatus(lane, condition, openTimeSeconds) {
+            const statusEl = document.getElementById(`lane-${lane}`).querySelector('.status-badge');
+            const timeEl = document.getElementById(`time-${lane}`);
+
+            statusEl.textContent = condition.charAt(0).toUpperCase() + condition.slice(1);
+            statusEl.className = `status-badge status-${condition}`;
+
+            if (condition === 'open') {
+                laneTimers[lane] = openTimeSeconds;
+                if (timerIntervals[lane]) clearInterval(timerIntervals[lane]);
+                timerIntervals[lane] = setInterval(() => {
+                    laneTimers[lane]++;
+                    timeEl.textContent = formatTime(laneTimers[lane]);
+                }, 1000);
+                timeEl.textContent = formatTime(openTimeSeconds);
+                timeEl.style.display = 'block';
+            } else {
+                if (timerIntervals[lane]) {
+                    clearInterval(timerIntervals[lane]);
+                    delete timerIntervals[lane];
+                }
+                timeEl.textContent = 'N/A';
+                timeEl.style.display = 'block';
+                delete laneTimers[lane];
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `Open for ${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateStatus(text) {
+            const statusEl = document.getElementById('mqtt-status');
+            statusEl.textContent = `MQTT: ${text}`;
+            statusEl.className = `mqtt-status mqtt-${text.toLowerCase().includes('connect') || text.toLowerCase().includes('success') ? 'connected' : text.toLowerCase().includes('connect') ? 'connecting' : 'disconnected'}`;
+        }
+
+        // Init on load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Dashboard Loading...');
+            initMqtt();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (mqttClient && mqttClient.isConnected()) {
+                mqttClient.disconnect();
+            }
+            Object.values(timerIntervals).forEach(clearInterval);
+        });
+    </script>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Dashboard with MQTT Lane Status (HiveMQ)</title>
+    <script src="https://unpkg.com/paho-mqtt@1.0.1/paho-mqtt.min.js"></script> <!-- MQTT Client Library -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .mqtt-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .mqtt-connected {
+            background-color: #4CAF50; /* Green */
+        }
+
+        .mqtt-disconnected {
+            background-color: #f44336; /* Red */
+        }
+
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            flex-grow: 1;
+            padding: 0 10px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            height: 80vh;
+            min-height: 500px;
+            box-sizing: border-box;
+        }
+
+        .video-box {
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Space for status below video */
+            align-items: center;
+            padding: 10px;
+            min-height: 0;
+            box-sizing: border-box;
+        }
+
+        .video-box video {
+            width: 100%;
+            height: 80%; /* Give space for status below */
+            max-height: 80%;
+            object-fit: contain;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .video-box h2 {
+            font-size: 1.2em;
+            color: #555;
+            margin: 10px 0 5px 0;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* Lane Status UI */
+        .lane-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: 5px;
+            padding: 5px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .status-open {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-closed {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .running-time {
+            font-size: 0.8em;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr 1fr 1fr;
+                height: auto;
+                gap: 15px;
+                max-width: 100%;
+            }
+            
+            .video-box video {
+                height: 60%; /* Adjust for mobile */
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .mqtt-status {
+                position: static;
+                margin-bottom: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .dashboard-grid {
+                grid-template-rows: repeat(4, auto);
+            }
+        }
+
+        video {
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mqtt-status" class="mqtt-status mqtt-disconnected">MQTT: Disconnected</div>
+
+    <h1>Traffic Camera Live Feeds with Lane Status</h1>
+    
+    <div class="dashboard-container">
+        <div class="dashboard-grid">
+            <div class="video-box">
+                <h2>Intersection North</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video5.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-north">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-north">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection South</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video6.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-south">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-south">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection East</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video7.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-east">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-east">N/A</div>
+                </div>
+            </div>
+
+            <div class="video-box">
+                <h2>Intersection West</h2>
+                <video controls autoplay loop muted>
+                    <source src="videos/video8.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="lane-status" id="lane-west">
+                    <div class="status-badge status-closed">Closed</div>
+                    <div class="running-time" id="time-west">N/A</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MQTT Configuration (Customized for Your Setup)
+        const MQTT_CONFIG = {
+            broker: 'ws://broker.hivemq.com:8000/mqtt', // Your HiveMQ WebSocket broker
+            clientId: 'dashboard_' + Math.random().toString(16).substr(2, 8), // Unique ID
+            topic: 'device/traffic1', // Single topic for all lane data
+            username: '', // No auth needed for public HiveMQ
+            password: ''  // No auth needed
+        };
+
+        // Global variables
+        let mqttClient;
+        let laneTimers = {}; // Track open times for each lane
+        let timerIntervals = {}; // For live updating timers
+        const lanes = ['north', 'south', 'east', 'west']; // Lane keys
+
+        // Initialize MQTT
+        function initMqtt() {
+            // Parse broker for host/port (HiveMQ format: ws://host:port/path)
+            const url = new URL(MQTT_CONFIG.broker);
+            const host = url.hostname;
+            const port = parseInt(url.port) || (url.protocol === 'wss:' ? 443 : 80);
+            const path = url.pathname;
+
+            mqttClient = new Paho.MQTT.Client(host, port, MQTT_CONFIG.clientId);
+
+            mqttClient.onConnectionLost = onConnectionLost;
+            mqttClient.onMessageArrived = onMessageArrived;
+
+            // Connect options
+            const connectOptions = {
+                onSuccess: onConnect,
+                onFailure: (e) => {
+                    console.error('MQTT Connection Failed:', e);
+                    updateStatus('Disconnected - Retrying...');
+                    setTimeout(initMqtt, 5000); // Auto-retry every 5s
+                },
+                useSSL: MQTT_CONFIG.broker.startsWith('wss'),
+                userName: MQTT_CONFIG.username,
+                password: MQTT_CONFIG.password,
+                timeout: 10
+            };
+
+            mqttClient.connect(connectOptions);
+        }
+
+        // On Connect: Subscribe to the single topic
+        function onConnect() {
+            console.log('MQTT Connected Successfully to HiveMQ');
+            updateStatus('Connected');
+
+            // Subscribe to the main topic
+            mqttClient.subscribe(MQTT_CONFIG.topic, {qos: 1});
+            console.log(`Subscribed to ${MQTT_CONFIG.topic}`);
+        }
+
+        // On Connection Lost
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log('MQTT Connection Lost:', responseObject.errorMessage);
+            }
+            updateStatus('Disconnected');
+            setTimeout(initMqtt, 3000); // Reconnect after 3s
+        }
+
+        // On Message Received (Single Topic for All Lanes)
+        function onMessageArrived(message) {
+            console.log('MQTT Message Received:', message.payloadString, 'Topic:', message.destinationName);
+            
+            if (message.destinationName !== MQTT_CONFIG.topic) return;
+
+            try {
+                const data = JSON.parse(message.payloadString); // Parse JSON payload
+                console.log('Parsed Data:', data);
+
+                // Update each lane from the payload (assume keys: north, south, etc.)
+                lanes.forEach(lane => {
+                    if (data[lane]) {
+                        const laneData = data[lane];
+                        updateLaneStatus(lane, laneData.condition || 'closed', laneData.openTime || 0);
+                    }
+                });
+            } catch (e) {
+                console.error('Invalid JSON in message:', e);
+            }
+        }
+
+        // Update Lane UI
+        function updateLaneStatus(lane, condition, openTimeSeconds) {
+            const statusEl = document.getElementById(`lane-${lane}`).querySelector('.status-badge');
+            const timeEl = document.getElementById(`time-${lane}`);
+
+            // Update status badge
+            statusEl.textContent = condition.charAt(0).toUpperCase() + condition.slice(1);
+            statusEl.className = `status-badge status-${condition}`;
+
+            // Handle time/timer
+            if (condition === 'open') {
+                // Start or reset timer from provided openTime
+                laneTimers[lane] = openTimeSeconds;
+                if (timerIntervals[lane]) clearInterval(timerIntervals[lane]);
+                timerIntervals[lane] = setInterval(() => {
+                    laneTimers[lane]++;
+                    timeEl.textContent = formatTime(laneTimers[lane]);
+                }, 1000); // Update every second
+                timeEl.textContent = formatTime(openTimeSeconds);
+                timeEl.style.display = 'block';
+            } else {
+                // Closed: Stop timer, show N/A
+                if (timerIntervals[lane]) {
+                    clearInterval(timerIntervals[lane]);
+                    delete timerIntervals[lane];
+                }
+                timeEl.textContent = 'N/A';
+                timeEl.style.display = 'block';
+                delete laneTimers[lane];
+            }
+        }
+
+        // Format seconds to MM:SS
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `Open for ${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update MQTT Status Indicator
+        function updateStatus(text) {
+            const statusEl = document.getElementById('mqtt-status');
+            statusEl.textContent = `MQTT: ${text}`;
+            statusEl.className = `mqtt-status ${text.toLowerCase().includes('connect') ? 'mqtt-connected' : 'mqtt-disconnected'}`;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMqtt();
+            console.log('Dashboard with HiveMQ MQTT initialized. Publish to device/traffic1 with JSON like {"north": {"condition": "open", "openTime": 30}, ...}');
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (mqttClient && mqttClient.isConnected()) {
+                mqttClient.disconnect();
+            }
+            Object.values(timerIntervals).forEach(interval => clearInterval(interval));
+        });
+    </script>
+
+</body>
+</html>

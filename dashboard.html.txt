@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Dashboard (2x2 Grid)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns */
+            grid-template-rows: 1fr 1fr;    /* Two rows */
+            gap: 20px; /* Space between video boxes */
+            width: 90%; /* Adjust overall width of the grid */
+            max-width: 1200px; /* Max width for larger screens */
+            flex-grow: 1; /* Allow grid to take available vertical space */
+        }
+
+        .video-box {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden; /* Ensures video corners are rounded */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .video-box video {
+            width: 100%;
+            height: auto; /* Maintain aspect ratio */
+            max-height: 300px; /* Limit video height for consistent look */
+            display: block; /* Remove extra space below video */
+            border-radius: 4px; /* Slightly rounded video corners */
+        }
+
+        .video-box h2 {
+            font-size: 1.2em;
+            color: #555;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr; /* Single column on smaller screens */
+                grid-template-rows: auto;
+                width: 95%;
+            }
+            .video-box video {
+                max-height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Traffic Camera Live Feeds</h1>
+
+    <div class="dashboard-grid">
+        <div class="video-box">
+            <h2>Intersection North</h2>
+            <video controls autoplay loop muted>
+                <source src="videos/video1.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <div class="video-box">
+            <h2>Intersection South</h2>
+            <video controls autoplay loop muted>
+                <source src="videos/video2.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <div class="video-box">
+            <h2>Intersection East</h2>
+            <video controls autoplay loop muted>
+                <source src="videos/video3.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <div class="video-box">
+            <h2>Intersection West</h2>
+            <video controls autoplay loop muted>
+                <source src="videos/video4.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+
+</body>
+</html>
